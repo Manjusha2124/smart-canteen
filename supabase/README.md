@@ -14,7 +14,13 @@ until you have completed the setup below and tested the deployed site.
 3. Run `realtime.sql` in the SQL Editor. This safely enables the live update
    publication for the app's tables and adds a uniqueness guard for menu items.
 4. Under **Authentication → Providers → Email**, enable email/password sign-in
-   and email confirmation for real accounts.
+   and email confirmation for real accounts. Under **Authentication → URL
+   Configuration**, set the Site URL to
+   `https://manjusha2124.github.io/smart-canteen/` and add that exact URL to
+   the redirect URL allow list. Registration confirmation links return to the
+   deployed app; they will not work correctly if the URL is not allow-listed.
+   For reliable confirmation email delivery, configure a project-owned SMTP
+   provider under **Project Settings → Authentication → SMTP Settings**.
 5. The frontend is now wired to Supabase Auth. Create the canteen owner's
    account in the app and confirm its email. The auth trigger creates a student
    profile using the submitted `display_name` and 10-digit `phone` metadata.

@@ -3,6 +3,7 @@
   const sdk = window.supabase;
   const app = document.querySelector('#app');
   const queueLabel = count => count === 1 ? '1 person' : `${count} people`;
+  const authNoticeKey = 'scq_auth_notice';
   let client;
   let realtime;
   let currentProfile;
@@ -11,9 +12,9 @@
   const localAdminView = window.admin;
   const localDrawBell = window.drawBell;
 
-  const fail = (error, action) => {
+  const fail = (error, action, userMessage = `${action} failed. Check the connection and try again.`) => {
     console.error(`Supabase ${action} failed:`, error);
-    toast(`${action} failed. Check the connection and try again.`);
+    toast(userMessage);
   };
   const requireClient = () => {
     if (!client) throw new Error('Supabase configuration or SDK is unavailable');
@@ -186,12 +187,16 @@
       const { error } = await requireClient().auth.signInWithPassword({ email, password });
       if (error) throw error;
       await loadRemoteState();
+      sessionStorage.removeItem(authNoticeKey);
       setSess(currentProfile.id);
       listen();
       go('/' + ({ student: 'home', staff: 'staff', admin: 'admin' }[currentProfile.role] || 'home'));
       render();
     } catch (error) {
-      fail(error, 'Sign in');
+      const message = error?.code === 'email_not_confirmed'
+        ? 'Confirm your email using the link Supabase sent before signing in. Check your spam folder, or ask the project owner to confirm your account in Supabase.'
+        : 'Invalid email or password. If you just registered, confirm your email from the Supabase message first. If no message arrived, check spam or ask the project owner to check Supabase Auth → Users.';
+      fail(error, 'Sign in', message);
     }
   }
 
@@ -208,22 +213,26 @@
       const { data, error } = await requireClient().auth.signUp({
         email,
         password,
-        options: { data: { display_name: name, phone } }
+        options: {
+          data: { display_name: name, phone },
+          emailRedirectTo: `${window.location.origin}${window.location.pathname}`
+        }
       });
       if (error) throw error;
       if (!data.session) {
-        toast('Check your email to confirm your account before signing in');
+        sessionStorage.setItem(authNoticeKey, 'Registration received. Confirm your email using the Supabase message before signing in. Check your spam folder. If no message arrives, ask the project owner to confirm the account in Supabase Auth → Users and check the project email/SMTP settings.');
         go('/login');
         render();
         return;
       }
+      sessionStorage.removeItem(authNoticeKey);
       await loadRemoteState();
       setSess(currentProfile.id);
       listen();
       go('/home');
       render();
     } catch (error) {
-      fail(error, 'Registration');
+      fail(error, 'Registration', error?.message || 'Registration failed. Check that the email is valid and try again.');
     }
   }
 
@@ -529,7 +538,14 @@
   }
 
   function renderLogin() {
-    return hero() + `<div class="card auth"><h2>Sign in</h2><label>Email</label><input id="em" type="email" autocomplete="username"><label>Password</label><input id="pw" type="password" autocomplete="current-password"><div style="margin-top:14px"><button class="btn" style="width:100%" onclick="doLogin()">Sign in</button></div><p class="mu">New student? <a href="#/register">Create an account</a></p></div>`;
+    let authNotice = '';
+    try {
+      const notice = sessionStorage.getItem(authNoticeKey);
+      if (notice) authNotice = `<div class="backend-notice">${esc(notice)}</div>`;
+    } catch (error) {
+      console.warn('Could not read registration status:', error);
+    }
+    return hero() + `<div class="card auth"><h2>Sign in</h2>${authNotice}<label>Email</label><input id="em" type="email" autocomplete="username"><label>Password</label><input id="pw" type="password" autocomplete="current-password"><div style="margin-top:14px"><button class="btn" style="width:100%" onclick="doLogin()">Sign in</button></div><p class="mu">New student? <a href="#/register">Create an account</a></p></div>`;
   }
   function renderRegister() {
     return `<div class="card auth"><h2>Student registration</h2><label>Name</label><input id="n" autocomplete="name"><label>Email</label><input id="em" type="email" autocomplete="email"><label>Phone</label><input id="ph" inputmode="numeric" maxlength="10" autocomplete="tel"><label>Password</label><input id="pw" type="password" autocomplete="new-password"><label>Confirm password</label><input id="pc" type="password" autocomplete="new-password"><button class="btn" style="width:100%;margin-top:14px" onclick="doReg()">Create student account</button><p class="mu">Already registered? <a href="#/login">Sign in</a></p></div>`;
